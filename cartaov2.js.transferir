@@ -1,0 +1,568 @@
+﻿var emailValido = false;
+var elementCheckout;
+
+$(document).ready(function () {
+    $("#CPF").mask("000.000.000-00");
+
+    if ($("#mensagem").lenght > 0 && $("#mensagem").html() != "") {
+        if ($("#mensagem").html().indexOf("CPF") != -1 && $("#mensagem").html().toString().indexOf("cartão") != -1) {
+            AlertaErro($i18nShared.payment.checkout.validation.cpfHolderIncorrect, $("#mensagem").html(), $("#CardCpf"), false);
+        }
+        else if ($("#mensagem").html().indexOf("CPF") != -1) {
+            AlertaErro($i18nShared.payment.checkout.validation.cpfIncorrect, $("#mensagem").html(), $("#CPF"), false);
+        }
+        else if ($("#mensagem").html().indexOf("já está sendo utilizado.") != -1) {
+            AlertaErro($i18nShared.payment.checkout.validation.emailUsedTitle, $i18nShared.payment.checkout.validation.emailUsedText, $("#Email"), false);
+        }
+        else {
+            AlertaErro($("#mensagem").val(), $i18nShared.payment.checkout.validation.fillCardDetails, "undefined");
+        }
+
+        $(".saveCheckout").removeClass('is-loading');
+    }
+
+    $("#Email").change(function () {
+        emailValido = false;
+        ValidaEmail();
+    });
+
+    $("#CPF").change(function () {
+        if ($("#IdPais").val() == 'BR')
+            ValidaCpf(this, $i18nShared.payment.checkout.validation.cpfRequired);
+    });
+
+    $("#SenhaCadastro").change(function () {
+        let count = 0;
+
+        if ($(this).val().length >= 8)
+            count += 1;
+
+        if ($(this).val().match(/[A-Z]/g))
+            count += 1;
+
+        if ($(this).val().match(/[a-z]/g))
+            count += 1;
+
+        if ($(this).val().match(/[0-9]/g))
+            count += 1;
+
+        if ($(this).val().match(/[\`|\~\!|\@|\#|\$|\%|\^|\&|\*|\(|\)|\+|\=|\[|\{|\]|\}|\||\\|\<|\,|\.|\>|\?|\;|\:|\-|\""|\']/g))
+            count += 1;
+
+        if (count < 5)
+            AlertaErro($i18nShared.payment.checkout.validation.passwordTitle, $i18nShared.payment.checkout.validation.passwordText, $("#SenhaCadastro"));
+    });
+
+    $("#NomeVerdadeiro").change(function () {
+        ValidaNomeCompleto(this, $i18nShared.payment.checkout.validation.fullNameTitle, $i18nShared.payment.checkout.validation.fullNameText);
+    });
+
+    $("#CPF, #NomeVerdadeiro").change(function () {
+        if ($("#NomeVerdadeiro").length > 0 && $("#NomeVerdadeiro").val() != "" && $("#CPF").length > 0 && $("#CPF").val() != "")
+            ValidarCpfNome($("#NomeVerdadeiro"), $("#CPF"), true);
+    });
+
+    $("#DataNascimento").blur(function () {
+        if ($("#DataNascimento").length > 0 && $("#DataNascimento").val() != "" && $("#NomeVerdadeiro").length > 0 && $("#NomeVerdadeiro").val() != "" && $("#CPF").length > 0 && $("#CPF").val() != "")
+            ValidarCpfNome($("#NomeVerdadeiro"), $("#CPF"), true, $("#DataNascimento"));
+    });
+
+    $("#Cep").change(function () {
+        country = $("#IdPais").val();
+        if (!country || country === 'BR') {
+            ConsultaCepSimples($(this).val(), function (data) {
+                if (data !== null) {
+                    $("#Rua").val(data.logradouro);
+                    $("#Bairro").val(data.bairro);
+                    $("#Cidade").val(data.localidade);
+                    $("#Estado").val(data.uf);
+                }
+                else {
+                    $(".restanteEndereco").show();
+                }
+            });
+        }
+    });
+
+    $(".btn-back-top").click(function () {
+        $("#beneficios_assinatura").hide();
+        $(".btn-back-top").hide();
+        $("#preencheDados").slideUp();
+        $(".profile-description").show();
+        $(".profile-img-checkout").show();
+        $(".profile-signatures").show();
+        $(".profile-sale-value").show();
+        $("#btnMensal").focus();
+    });
+
+    $(".saveCheckout").click(function () {
+        elementCheckout = $(this);
+
+        if (elementCheckout) {
+            $("#Recorrencia").val(elementCheckout.data("recorrencia"));
+            $(".btnCheckoutRecorrencia").attr("data-recorrencia", elementCheckout.data("recorrencia"));
+            $(".btnCheckoutRecorrencia").attr("data-valor", elementCheckout.data("valor"));
+            $("#valorinscricaoselecionadopix").html(elementCheckout.data("valor"));
+            $("#valorinscricaoselecionadocartao").html(elementCheckout.data("valor"));
+        }
+
+        if (!$('#Nome').is(":visible")) {
+            $(".btn-back-top").show();
+            $("#preencheDados").slideDown();
+            $(".profile-description").hide();
+            $("#beneficios_assinatura").show();
+            $(".profile-img-checkout").hide();
+            $(".profile-signatures").hide();
+            $(".profile-sale-value").hide();
+            $("#Nome").focus();
+        } else {
+            ValidateAndSave();
+        }
+    });
+
+    $("#formCheckout").submit(function () {
+        $(".pageloader").show();
+        $('.pageloader').toggleClass('d-flex');
+    });
+    $("#formCheckout").bind('ajax:complete', function () {
+        $(".pageloader").hide();
+        $('.pageloader').toggleClass('d-flex');
+    });
+
+    if ($("#mensagem").lenght > 0 && $("#mensagem").html() != "") {
+        swal({
+            title: $i18nShared.modal.notice,
+            text: $("#mensagem").html(),
+            icon: "info"
+        });
+    }
+});
+
+async function ValidateAndSave(paymentMethod, cardData) {
+    $(".saveCheckout").addClass('is-loading');
+
+    var validacaoCheckout = await ValidacoesCheckout(paymentMethod, cardData);
+
+    if (!validacaoCheckout) {
+        $(".saveCheckout").removeClass('is-loading');
+        return;
+    }
+
+    if (!$("#aceiteTermos")[0].checked) {
+
+        $("#aceiteTermos").find(".wave").removeClass("is-hidden");
+        $(".saveCheckout").removeClass('is-loading');
+
+        AlertaErro($i18nShared.checkout.acceptTerms.Title, $i18nShared.checkout.acceptTerms.Text, $("#aceiteTermos")[0]);
+
+        return;
+    }
+
+    if ($("#AceiteDesconto").is(":visible") && !$("#aceiteDesconto")[0].checked) {
+        $("#aceiteDesconto").find(".wave").removeClass("is-hidden");
+        $(".saveCheckout").removeClass('is-loading');
+
+        AlertaErro($i18nShared.checkout.acceptDiscount.Title, $i18nShared.checkout.acceptDiscount.Text, $("#aceiteDesconto")[0]);
+
+        return;
+    }
+
+    SaveCheckout(paymentMethod, cardData);
+}
+
+async function SaveCheckout(paymentMethod, cardData) {
+    let valor = null
+
+    if (elementCheckout.data("valor") !== undefined) {
+        valor = elementCheckout.data("valor").replace(',', '.') * 1;
+    }
+
+    if ($(".ehPix").is(":visible") || paymentMethod === "PIX") {
+        $("#FormaPagamento").val("3");
+    } else if ($(".ehBoleto").is(":visible")) {
+        if (valor >= 19) {
+            $("#FormaPagamento").val("2");
+        } else {
+            alert($i18nShared.payment.checkout.validation.amountMin);
+            $(".saveCheckout").removeClass('is-loading');
+            return;
+        }
+    } else {
+        $("#FormaPagamento").val("1");
+    }
+
+    if ($("#CamposCartao").is(":visible")) {
+        const wc = getFormCards()
+        const cardFormData = wc.getCardFormData()
+
+        $("#NomeCartao").val(cardFormData.name);
+        $("#CpfCartao").val(cardFormData.document);
+        $("#MesCartao").val(cardFormData.expirationMonth);
+        $("#AnoCartao").val(cardFormData.expirationYear);
+        $("#NumeroCartao").val(cardFormData.number);
+        $("#CvvCartao").val(cardFormData.cvv);
+    } else if (paymentMethod == "CREDIT_CARD" && cardData) {
+        $("#NomeCartao").val(cardData.name);
+        $("#CpfCartao").val(cardData.document);
+        $("#MesCartao").val(cardData.expirationMonth);
+        $("#AnoCartao").val(cardData.expirationYear);
+        $("#NumeroCartao").val(cardData.number);
+        $("#CvvCartao").val(cardData.cvv);
+
+    } else {
+        $("#NomeCartao").val("");
+        $("#CpfCartao").val("");
+    }
+
+    $("#formCheckout").submit();
+}
+
+async function ValidaEmail(success, error, finish) {
+    return new Promise(resolve => {
+        var input = $("#Email");
+
+        if (!isEmail($(input).val())) {
+            AlertaErro($i18nShared.payment.card.validation.emailTitle, $i18nShared.payment.card.validation.emailMsg, $(input));
+            resolve(false);
+        }
+
+        if (emailValido != true) {
+
+            $(".pageloader").show();
+            $('.pageloader').toggleClass('d-flex');
+            $.ajax({
+                url: "/Checkout?handler=ValidarEmail",
+                data: { _Email: $(input).val(), _nomePerfil: $("#Nome").val() },
+                cache: false,
+                async: true,
+                type: "GET",
+                success: function (data) {
+                    $(".pageloader").hide();
+                    $('.pageloader').toggleClass('d-flex');
+                    if (!data.ok) {
+                        if (data.message) {
+                            AlertaErroEmail(data.message.titulo, data.message.mensagem, input);
+                        }
+                        resolve(false);
+                    }
+                    else if (data.message != null && data.message.ehBume == true) {
+                        emailValido = true;
+                        swal({
+                            title: data.message.titulo,
+                            text: data.message.mensagem,
+                            icon: "warning",
+                            buttons: {
+                                confirm: {
+                                    text: $i18nShared.payment.card.validation.emailUseDiscount,
+                                    value: true,
+                                    visible: true,
+                                    className: "",
+                                    closeModal: true
+                                }
+                            }
+                        }).then(function (okay) {
+                            $(".DivTrimestralSemestral").hide();
+                            $("#btnMensal").html($i18nShared.payment.card.validation.emailSubscribeBy + data.message.valor.toFixed(2).replace(".", ","));
+                            $(".btnObterAcesso").attr("data-recorrencia", "Mensal");
+                            $("#Recorrencia").val("Mensal");
+                            $("#valorAssinaturaMensal").html(data.message.valor.toFixed(2).replace(".", ","));
+                            $("#AceiteDesconto").removeClass("is-hidden");
+                            resolve(true);
+                        }).catch(function (err) {
+                            resolve(false);
+                        });
+                    }
+                    else {
+                        emailValido = true;
+                        input.parent(".control").parent(".field-group").removeClass("is-danger");
+                        resolve(true);
+                    }
+                },
+                error: function (reponse) {
+                    console.log(reponse);
+                    resolve(false);
+                }
+            });
+        }
+        else
+            resolve(true);
+    });
+
+}
+
+async function AlertaErroEmail(titulo, mensagem, elemento, reseta = true, elementoMensagem = $("#mensagem")) {
+    return new Promise(resolve => {
+        swal({
+            title: titulo,
+            text: mensagem,
+            icon: "warning",
+            buttons: {
+                cancel: {
+                    text: "OK",
+                    value: false,
+                    visible: true,
+                    className: "",
+                    closeModal: true
+                },
+                confirm: {
+                    text: $i18nShared.payment.card.validation.emailConfirmLogin,
+                    value: true,
+                    visible: true,
+                    className: "",
+                    closeModal: true
+                }
+            }
+        }).then(function (okay) {
+
+            if (okay) {
+                $("#Usuario").val($("#Email").val());
+                $("#loginURL")[0].click();
+
+            }
+
+            if (elemento == "undefined")
+                resolve();
+
+            $(elemento).focus();
+            $(elemento).parent(".control").parent(".field-group").addClass("is-danger");
+
+            if (reseta)
+                $(elemento).val('');
+
+            $(elementoMensagem).val(titulo);
+            resolve();
+        });
+    });
+
+}
+
+async function ValidarCpfNome(_nome, _cpf, perfil, _dataNascimento) {
+    return new Promise(resolve => {
+        $.ajax({
+            url: "/Checkout?handler=ValidarCPF",
+            data: { _nome: $(_nome).val(), _cpf: $(_cpf).val(), _perfil: perfil, _dataNascimento: $(_dataNascimento).val() },
+            cache: false,
+            async: true,
+            type: "GET",
+            success: function (data) {
+                if (!data.ok) {
+                    swal({
+                        title: $i18nShared.payment.card.validation.cpfNomeTitle,
+                        text: data.message,
+                        icon: "warning"
+                    }).then(function () {
+                        $(_nome).focus();
+                        $(_nome).parent(".control").parent(".field-group").addClass("is-danger");
+                        $(_cpf).parent(".control").parent(".field-group").addClass("is-danger");
+                        $(_dataNascimento).parent(".control").parent(".field-group").addClass("is-danger");
+
+                        $(_nome).val('');
+                        $(_cpf).val('');
+                        $(_dataNascimento).val('');
+                        resolve();
+                    });
+                } else {
+                    $(_nome).parent(".control").parent(".field-group").removeClass("is-danger");
+                    $(_cpf).parent(".control").parent(".field-group").removeClass("is-danger");
+                    $(_dataNascimento).parent(".control").parent(".field-group").removeClass("is-danger");
+                    resolve();
+                }
+            },
+            error: function (reponse) {
+                resolve();
+            }
+        });
+    });
+}
+
+async function ValidarCpfNome2(_nome, _cpf, perfil) {
+    return new Promise(resolve => {
+        $.ajax({
+            url: "/Checkout?handler=ValidarCPF",
+            data: { _nome: _nome, _cpf: _cpf, _perfil: perfil },
+            cache: false,
+            async: true,
+            type: "GET",
+            success: function (data) {
+                if (!data.ok) {
+                    swal({
+                        title: $i18nShared.payment.card.validation.cpfNomeTitle,
+                        text: data.message,
+                        icon: "warning"
+                    }).then(function () {
+                        resolve(false);
+                    });
+                } else {
+                    resolve(true);
+                }
+            },
+            error: function (reponse) {
+                resolve(false);
+            }
+        });
+    });
+}
+
+function ValidaCpf(elemento, mensagem) {
+    var input = $(elemento);
+
+    if (!TestaCPF(input.val())) {
+        AlertaErro($i18nShared.payment.card.validation.cpf, mensagem, input);
+        return false;
+    }
+
+    $(input).parent(".control").parent(".field-group").removeClass("is-danger");
+    return true;
+}
+
+function ValidaNomeCompleto(elemento, titulo, mensagem) {
+    var input = $(elemento)
+
+    if (input.val().split(' ').length <= 1) {
+        AlertaErro(titulo, mensagem, input, false);
+        return false;
+    }
+
+    $(input).parent(".control").parent(".field-group").removeClass("is-danger");
+    return true;
+}
+
+async function ValidaRequeridos() {
+    return new Promise(resolve => {
+        var faltouPreencher = false;
+        var primeiroInput;
+        $("input[type='text'][required],input[type='date'][required],select[required]").each(function () {
+            if ($(this).is(":visible") && $(this).val() == "") {
+                $(this).parent(".control").parent(".field-group").addClass("is-danger");
+
+                if (!faltouPreencher) {
+                    primeiroInput = this;
+                }
+
+                faltouPreencher = true;
+            }
+        });
+        if (faltouPreencher) {
+            AlertaErro($i18nShared.payment.card.validation.fieldRequireTitle, $i18nShared.payment.card.validation.fieldRequireText, $(primeiroInput));
+            resolve(false);
+        }
+        else
+            resolve(true);
+    });
+}
+
+async function ValidacoesCheckout(paymentMethod, cardData) {
+    var validacaoEmail = await ValidaEmail();
+    var validaRequiridos = await ValidaRequeridos();
+
+    if ($('#Nome').val() === "") {
+        AlertaErro($i18nShared.payment.checkout.validation.nameTitle, $i18nShared.payment.checkout.validation.nameText, $("#Nome"));
+        return false;
+    }
+
+    if (!ValidaNomeCompleto($("#NomeVerdadeiro"), $i18nShared.payment.checkout.validation.fullNameTitle, $i18nShared.payment.checkout.validation.fullNameText)) {
+        return false;
+    }
+
+    if ($("#CPF").val() != "" && $("#IdPais").val() == 'BR') {
+        if (!ValidaCpf($("#CPF"), $i18nShared.payment.checkout.validation.cpfRequired)) {
+            return false;
+        }
+    }
+
+    let count = 0;
+
+    if ($('#SenhaCadastro').val().length >= 8)
+        count += 1;
+
+    if ($('#SenhaCadastro').val().match(/[A-Z]/g))
+        count += 1;
+
+    if ($('#SenhaCadastro').val().match(/[a-z]/g))
+        count += 1;
+
+    if ($('#SenhaCadastro').val().match(/[0-9]/g))
+        count += 1;
+
+    if ($('#SenhaCadastro').val().match(/[\`|\~\!|\@|\#|\$|\%|\^|\&|\*|\(|\)|\+|\=|\[|\{|\]|\}|\||\\|\<|\,|\.|\>|\?|\;|\:|\-|\""|\']/g))
+        count += 1;
+
+    if (count < 5) {
+        AlertaErro($i18nShared.payment.checkout.validation.passwordTitle, $i18nShared.payment.checkout.validation.passwordText, $("#SenhaCadastro"));
+        return false;
+    }
+
+    if (!validacaoEmail) {
+        return false;
+    }
+
+    if (paymentMethod == "CREDIT_CARD" && cardData) {
+        const res = await ValidarCpfNome2(cardData.name, cardData.document, false)
+
+        if (!res) {
+            return false
+        }
+    }
+
+    if ($("#CamposCartao").is(":visible")) {
+        const isValid = await getFormCards().isValidCardForm()
+
+        if (!isValid) {
+            return false;
+        }
+
+        const data = getFormCards().getCardFormData()
+        const res = await ValidarCpfNome2(data.name, data.document, false)
+
+        if (!res) {
+            return false
+        }
+    }
+
+    return new Promise(resolve => {
+        if ($("#btnMensal").length > 0 && $("#Recorrencia").val() == "" && $("#PostPago").val() == "false") {
+            swal({
+                title: $i18nShared.payment.checkout.plan.title,
+                text: $i18nShared.payment.checkout.plan.text,
+                icon: "warning",
+                buttons: {
+                    mensal: {
+                        text: $i18nShared.payment.checkout.plan.month1 + " " + $("#btnMensal").html(),
+                        value: "mensal",
+                    },
+                    trimestral: {
+                        text: $i18nShared.payment.checkout.plan.months3 + " " + $("#btnTrimestral").html(),
+                        value: "trimestral",
+                    },
+                    semestral: {
+                        text: $i18nShared.payment.checkout.plan.months6 + " " + $("#btnSemestral").html(),
+                        value: "semestral",
+                    }
+                }
+            }).then((value) => {
+                $("#Recorrencia").val(value);
+                resolve(false);
+                SaveCheckout();
+                return;
+            });
+
+            setInterval(function () {
+                $(".swal-button-container").css("width", "100%");
+                $(".swal-button-container button").addClass("button");
+                $(".swal-button-container button").addClass("btnPagamento");
+                $(".swal-button-container button").addClass("preenchido");
+            }, 200);
+        }
+
+        if (!validaRequiridos) {
+            resolve(false);
+            return;
+        }
+
+        resolve(true);
+    });
+}
+
+function getFormCards() {
+    return $("#CamposCartao privacy-web-mycards")[0]
+}

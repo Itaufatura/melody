@@ -1,0 +1,145 @@
+﻿const customFancyboxTemplate = {
+    base: `<div class="fancybox-container" role="dialog" tabindex="-1">
+    <div class="fancybox-bg"></div>
+    <div class="fancybox-inner">
+        <div class="fancybox-custom-infobar">
+            ${window.clickedPostDate}
+        </div>
+        <div class="fancybox-toolbar">{{buttons}}</div>
+        <div class="fancybox-navigation">{{arrows}}</div>
+        <div class="fancybox-stage"></div>
+        <div class="fancybox-caption">
+            <div class="fancybox-caption__body"></div>
+        </div>
+    </div>
+</div>`,
+    navigationArrow: {
+        left: `<button data-fancybox-prev class="fancybox-button fancybox-button--arrow_left" title="{{PREV}}">
+    <i class="fa fa-solid fa-chevron-left"></i>
+    </button>`,
+        right: `<button data-fancybox-next class="fancybox-button fancybox-button--arrow_right" title="{{NEXT}}">
+    <i class="fa fa-solid fa-chevron-right"></i>
+</button>`
+    },
+    videoPlayer: `<video class="fancybox-video" controls="" controlslist="nodownload" poster="{{poster}}">
+    <source src="{{src}}" type="{{format}}"/>
+    Sorry, your browser doesn\'t support embedded videos
+<video/>`
+}
+
+const customSlickTemplate = {
+    navigationArrow: {
+        left: `<div class="fa slick-prev slick-custom-arrow"></div>`,
+        right: `<div class="fa slick-next slick-custom-arrow"></div>`,
+    }
+}
+
+const getDefaults = (defaults) => {
+    defaults.infobar = true;
+    defaults.buttons = ["close"];
+    defaults.clickOutside = "close";
+    defaults.autoFocus = false;
+    defaults.backFocus = false;
+
+    defaults.video = {
+        autoStart: false,
+        tpl: customFancyboxTemplate.videoPlayer
+    }
+
+    defaults.baseTpl = customFancyboxTemplate.base;
+
+    defaults.btnTpl.arrowLeft = customFancyboxTemplate.navigationArrow.left;
+    defaults.btnTpl.arrowRight = customFancyboxTemplate.navigationArrow.right;
+
+    return defaults;
+}
+
+$.fancybox.defaults = getDefaults($.fancybox.defaults);
+
+$().fancybox({
+    selector: 'carousel-inner .slick-slide:not(.slick-cloned)',
+    backFocus: false,
+    afterShow: function (instance, current) {
+        current.opts.$orig.closest(".slick-initialized").slick('slickGoTo', parseInt(current.index), true);
+    },
+});
+
+const applySlick = ($element) => {
+    const $carousel = $element ?? $(".carousel-inner");
+    if ($carousel) {
+        $carousel.slick({
+            infinite: false,
+            useTransform: true,
+            touchThreshold: 30,
+            easeCSS: "cubic-bezier(0,0,0,0.6)",
+            speed: 200,
+            dots: false,
+            arrows: true,
+            prevArrow: customSlickTemplate.navigationArrow.left,
+            nextArrow: customSlickTemplate.navigationArrow.right
+        })
+
+        $carousel.on("afterChange", (slick, currentSlide) => {
+            const $indicator = currentSlide.$slider[0].parentElement.querySelector(".carousel-indicator");
+            const $currentMedia = currentSlide.$slider[0].querySelector('.slick-current.slick-active');
+
+            const currentImageIndex = $currentMedia.querySelector("a")?.getAttribute("privacy-image-index") || $currentMedia.querySelector("div")?.getAttribute("privacy-image-index");
+            const $totalImageSlides = $indicator.querySelector(".total-image-slides");
+            const $currentImageSlide = $indicator.querySelector(".current-image-slide");
+
+            const $currentVideo = $currentMedia.querySelector("a") || $currentMedia.querySelector("div");
+            const currentVideoIndex = $currentVideo.getAttribute("privacy-video-index");
+            const $totalVideoSlides = $indicator.querySelector(".total-video-slides");
+            const $currentVideoSlide = $indicator.querySelector(".current-video-slide");
+
+
+            if (currentImageIndex) {
+                if (currentImageIndex) {
+                    $currentImageSlide.innerText = $totalImageSlides.innerText == '' ? '' : `${currentImageIndex}/`;
+                } else {
+                    $currentImageSlide.innerText = '';
+                }
+
+                const $indicatorContentImage = $indicator.querySelector(".carousel-indicator-content-image");
+                $indicatorContentImage.classList.add("active");
+
+                if ($currentVideoSlide) {
+                    $currentVideoSlide.innerText = '';
+                    const $indicatorContentVideo = $indicator.querySelector(".carousel-indicator-content-video");
+                    $indicatorContentVideo.classList.remove("active");
+                }
+            } else if (currentVideoIndex) {
+                if (currentVideoIndex) {
+                    $currentVideoSlide.innerText = $totalVideoSlides.innerText == '' ? $currentVideo.getAttribute("privacy-video-duration") : `${currentVideoIndex}/`;
+                } else {
+                    $currentVideoSlide.innerText = '';
+                }
+
+                const $indicatorContentVideo = $indicator.querySelector(".carousel-indicator-content-video");
+                $indicatorContentVideo.classList.add("active");
+
+                if ($currentImageSlide) {
+                    $currentImageSlide.innerText = '';
+                    const $indicatorContentImage = $indicator.querySelector(".carousel-indicator-content-image");
+                    $indicatorContentImage.classList.remove("active");
+                }
+            } else {
+                const $indicatorContentImage = $indicator.querySelector(".carousel-indicator-content-image");
+                const $indicatorContentVideo = $indicator.querySelector(".carousel-indicator-content-video");
+
+                if ($indicatorContentImage) {
+                    $currentImageSlide.innerText = '';
+                    $indicatorContentImage.classList.remove("active");
+                }
+
+                if ($indicatorContentImage) {
+                    $currentVideoSlide.innerText = '';
+                    $indicatorContentVideo.classList.remove("active");
+                }
+            }
+        })
+    }
+}
+
+const customEvent = new Event('PrivacyCarouselLoaded');
+document.dispatchEvent(customEvent);

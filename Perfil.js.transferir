@@ -1,0 +1,27 @@
+﻿function SeguirPerfil(ClienteId) {
+    initPageloader();
+
+    return $.ajax({
+        url: "/Profile?handler=SeguirPerfil",
+        data: { "ClienteId": ClienteId, "CobrancaId": '00000000-0000-0000-0000-000000000000', "Recorrencia": null, "VisitorID": null },
+        cache: false,
+        async: true,
+        type: "GET",
+        success: function (data) {
+            if (data.ok)
+                location.reload();
+            else {
+                $('.pageloader').toggleClass('is-active');
+                alert(data.message, function () {
+                    if (data.redirectUrl)
+                        window.location.href = data.redirectUrl;
+                    else
+                        window.location.reload();
+                });
+            }
+        },
+        error: function (reponse) {
+            //alert("error : " + reponse);
+        }
+    });
+}

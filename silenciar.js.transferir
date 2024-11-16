@@ -1,0 +1,47 @@
+﻿function FecharModalSilenciar() {
+    $("#silenciar-modal").toggleClass('is-active');
+}
+
+function SilenciarPerfil(profileId) {
+    $("#SilenciarPerfilId").val(profileId);
+    $("#silenciar-modal").toggleClass('is-active');
+
+    $.ajax({
+        url: "/Index?handler=HideContent",
+        data: {
+            contentId: $("#SilenciarPerfilId").val(),
+            hide: true,
+            type: "profile"
+        },
+        type: "GET",
+        success: function () {
+            document.getElementById('unmute-btn').classList.remove("d-none")
+            document.getElementById('mute-btn').classList.add("d-none")
+        },
+        error: function () {
+            location.reload();
+        }
+    });
+}
+
+function CancelarSilencio(profileId) {
+    $("#SilenciarPerfilId").val(profileId);
+    $("#silenciar-modal").toggleClass('is-active');
+
+    $.ajax({
+        url: "/Index?handler=HideContent",
+        data: {
+            contentId: $("#SilenciarPerfilId").val(),
+            hide: false,
+            type: "profile"
+        },
+        type: "GET",
+        success: function () {
+            document.getElementById('mute-btn').classList.remove("d-none")
+            document.getElementById('unmute-btn').classList.add("d-none")
+        },
+        error: function () {
+            location.reload();
+        }
+    });
+}

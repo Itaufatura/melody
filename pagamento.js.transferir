@@ -1,0 +1,206 @@
+﻿(() => {
+    $(document).ready(function () {
+        initObserverModal("tip-modal");
+        initObserverModal("notification-details-modal");
+
+        //Add Inactive Class To All Accordion Headers
+        $('.accordion-header').toggleClass('inactive-header');
+
+        //Open The First Accordion Section When Page Loads
+        $('.accordion-header').first().toggleClass('active-header').toggleClass('inactive-header');
+        $('.accordion-content').first().slideDown().toggleClass('open-content');
+
+        // The Accordion Effect
+        $('.accordion-header').click(function () {
+            if ($(this).is('.inactive-header')) {
+                $('.active-header').toggleClass('active-header').toggleClass('inactive-header').next().slideToggle().toggleClass('open-content');
+                $(this).toggleClass('active-header').toggleClass('inactive-header');
+                $(this).next().slideToggle().toggleClass('open-content');
+            }
+            else {
+                $('.inactive-header').toggleClass('active-header').toggleClass('inactive-header').next().slideToggle().toggleClass('open-content');
+                $(this).toggleClass('active-header').toggleClass('inactive-header');
+                $(this).next().slideToggle().toggleClass('open-content');
+            }
+        });
+    });
+
+    function initObserverModal(id) {
+        const targetNode = document.getElementById(id);
+
+        if (targetNode) {
+            const observer = new MutationObserver(() => {
+                const isModalOpenedByClass = targetNode.classList.contains('is-active');
+                const isModalOpenedByDisplay = window.getComputedStyle(targetNode).display === 'block';
+
+                if (isModalOpenedByClass || isModalOpenedByDisplay) {
+                    blockScroll()
+                } else {
+                    const wcPayment = document.getElementById('privacy-web-payment')
+                    const wcPaymentIsOpen = castBoolean(wcPayment.getAttribute('show-dialog'))
+
+                    if (!wcPaymentIsOpen) {
+                        unlockScroll()
+                    }
+                }
+            });
+
+            observer.observe(targetNode, { attributes: true, attributeFilter: ['class', 'style'] });
+        }
+    }
+
+    function castBoolean(val) {
+        return val === 'true' || val === true
+    }
+
+    function CarregarInfoModalTip(nomePerfil, fotoPerfil, clienteId, postId, chatId, chatMessageId, Recorrencia) {
+        var accordionHeader = document.querySelectorAll('#gerarPagamentoTip .accordion-header');
+        var accordionContent = document.querySelectorAll('#gerarPagamentoTip .accordion-content');
+
+        if (accordionHeader.length > 0 && accordionContent.length > 0) {
+            accordionHeader[0].classList.add('is-active');
+            accordionContent[0].style.display = 'block';
+        }
+
+        if (accordionHeader.length > 1 && accordionContent.length > 1) {
+            accordionHeader[1].classList.remove('is-active');
+            accordionContent[1].style.display = 'none';
+        }
+
+        $("#loaderpix").hide();
+        $("#txtNomePerfilTip").html(nomePerfil);
+
+        $("#fotoPerfilTip").attr("src", fotoPerfil);
+
+        $("#fotoPerfilTip").on('error', function () {
+            getDefaultAvatar({ element: document.getElementById("fotoPerfilTip"), userName: nomePerfil || nomePerfil });
+        });
+
+        $("#txtPostIdPagamento").val(postId);
+        $("#messageTip").val("");
+        $("#criadorMsgTip").show();
+        $("#gerarPagamentoTip").show();
+
+        const elButton = document.getElementById('close-tip-modal')
+        vincularBotaoCloseComModal({ elButton })
+
+        $('#tip-modal').show();
+    }
+
+    async function EfetuarPagamentoTip(valor) {
+        const postId = $("#txtPostIdPagamento").val()
+        const value = valor
+        const messageTip = $("#messageTip").val()
+
+        closeTipModal();
+
+        CarregarComponentePagamento({ page: 'tip', postId, value, messageTip })
+    }
+
+    function closeTipModal() {
+        $('#tip-modal').hide();
+        $("#gerarPagamentoTip").hide();
+    }
+
+    function vincularBotaoCloseComModal({ elButton }) {
+        elButton.addEventListener('click', () => {
+            closeTipModal()
+        })
+    }
+
+    function hasRestrictions() {
+        const el = document.getElementById('privacy-web-payment')
+        return castBoolean(el?.getAttribute('has-restrictions'))
+    }
+
+    async function EfetuarPagamento(clienteId, postId, valor, chatId, chatMessageId, recorrencia, page, creator, creatorNickname, coverImg, profileImg) {
+        if (hasRestrictions()) {
+            blockScroll()
+
+            swal({
+                title: $i18nShared.modal.warning,
+                text: $i18nShared.payment.missingPersonalData,
+                icon: "warning",
+                buttons: {
+                    confirm: {
+                        text: $i18nShared.payment.finish,
+                        value: true,
+                        closeModal: true
+                    },
+                    cancel: $i18nShared.cancel
+                }
+            }).then(function (value) {
+                if (value) {
+                    const path = window.location.pathname
+                    const url = `/settings/personal?id=${postId}&url=${path}`
+                    window.location.href = url;
+                }
+
+                unlockScroll()
+            });
+        } else {
+            CarregarComponentePagamento({
+                clientId: clienteId,
+                value: valor,
+                recurrence: recorrencia,
+                postId: postId,
+                page: page,
+                creator: creator,
+                creatorNickname: creatorNickname,
+                coverImg: coverImg,
+                profileImg: profileImg,
+            })
+        }
+    }
+
+    function CarregarComponentePagamento({ clientId, value, recurrence, postId, page, messageTip, creator, creatorNickname, coverImg, profileImg }) {
+        const el = document.getElementById('privacy-web-payment')
+
+        if (el) {
+            el.setAttribute('post-id', postId)
+            el.setAttribute('value', value)
+            el.setAttribute('page', recurrence ? 'profile' : page)
+            el.setAttribute('client-id', clientId)
+            el.setAttribute('recurrence', recurrence)
+            el.setAttribute('tip-message', messageTip)
+            el.setAttribute('creator', creator)
+            el.setAttribute('creator-nickname', creatorNickname)
+            el.setAttribute('cover-img', coverImg)
+            el.setAttribute('profile-img', profileImg)
+            el.setAttribute('show-dialog', true)
+
+            blockScroll()
+
+            el.addEventListener('close-dialog', () => {
+                el.setAttribute('show-dialog', false)
+
+                unlockScroll()
+            })
+
+            el.addEventListener('content-paid', ($event) => {
+                if (el.getAttribute('page') == 'profile' && $event.detail[0]) {
+                    window.location.reload()
+                } else if (el.getAttribute('page') == 'post' && $event.detail[0]) {
+                    const { postId, creator } = $event.detail[0]
+                    window.location.href = `${window.location.origin}/Post/${postId}/${creator}`;
+                } else if (el.getAttribute('page') == 'tip' && $event.detail[0]) {
+                    window.location.href = `${window.location.origin}/Colecoes/Mimos`;
+                }
+            })
+        }
+    }
+
+    function blockScroll() {
+        $("html").addClass('showing-modal');
+
+    }
+
+    function unlockScroll() {
+        $("html").removeClass('showing-modal');
+    }
+
+    // Exposed
+    window.CarregarInfoModalTip = CarregarInfoModalTip
+    window.EfetuarPagamento = EfetuarPagamento
+    window.EfetuarPagamentoTip = EfetuarPagamentoTip
+})()

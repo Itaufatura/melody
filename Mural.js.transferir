@@ -1,0 +1,526 @@
+﻿var agendado = false;
+var arquivado = false;
+var position = $(window).scrollTop();
+
+$(function () {
+    var carregaScrollPosts = true;
+    let carregaScrollMosaico = true;
+
+    let page = 0;
+    let take = 10;
+
+    $(window).scroll(function () {
+        const scroll = $(window).scrollTop();
+
+        if (scroll > position) {
+            let scrollPosition = window.pageYOffset;
+            let windowSize = window.innerHeight;
+            let bodyHeight = document.body.offsetHeight;
+            let distanceOfBottom = Math.max(bodyHeight - (scrollPosition + windowSize), 0);
+            let url, nomePerfil, filterMosaico;
+            let mosaicContainerExists = $('#bodyPostsMosaico').length ?? false;
+
+            if (distanceOfBottom < 300 && carregaScrollMosaico && mosaicContainerExists) {
+                page++;
+                carregaScrollMosaico = false;
+
+                url = "/Profile?handler=PartialPosts";
+
+                nomePerfil = $("#nomePerfil").val() || null;
+                filterMosaico = $("#filterMosaico").val() || null;
+
+                $.ajax({
+                    url: url,
+                    data: { skip: page * take, take: take, nomePerfil: nomePerfil, filter: filterMosaico },
+                    cache: false,
+                    async: true,
+                    type: "GET",
+                    success: function (response) {
+                        if (response) {
+                            const mediaHubElement = document.getElementById('privacy-web-mediahub-mosaic');
+                            let currentMosaicItems = mediaHubElement.getAttribute('mosaic-items');
+                            currentMosaicItems = JSON.parse(currentMosaicItems);
+
+                            let newData = Array.isArray(response) ? response : response.mosaicItems;
+
+                            let updatedMosaicItems = currentMosaicItems.concat(newData);
+
+                            mediaHubElement.setAttribute('mosaic-items', JSON.stringify(updatedMosaicItems));
+                        }
+
+                        carregaScrollMosaico = true;
+                        if (!response || response === '\r\n\r\n\r\n') {
+                            carregaScrollMosaico = false;
+                        }
+                    }
+                });
+            }
+
+            let bodyPostsExists = $('#bodyPosts').length ?? false;
+
+            if (distanceOfBottom < 300 && carregaScrollPosts && bodyPostsExists) {
+                carregaScrollPosts = false;
+                qtdAtual = $(".card.is-post").length;
+                url = "/Index?handler=PartialPosts";
+
+                nomePerfil = $("#nomePerfil").val() || null;
+
+                $.ajax({
+                    url: url,
+                    data: { skip: qtdAtual, take: 10, nomePerfil: nomePerfil, agendado: agendado, arquivado: arquivado },
+                    cache: false,
+                    async: true,
+                    type: "GET",
+                    success: function (data) {
+                        $("#bodyPosts").append(data);
+                        carregaScrollPosts = true;
+                    }
+                });
+            }
+        }
+
+        position = scroll;
+    });
+});
+
+function isVisible($el) {
+    var winTop = $(window).scrollTop();
+    var elTop = $el.offset().top;
+    var elHeigth = $el.height();
+    var displayHeigth = $(window).height();
+    return (((elTop + elHeigth) >= winTop)) && (((elTop - displayHeigth) < winTop));
+}
+
+function CarregarBotoesAmizade() {
+    $('a[name="LinkAdicionarAmizade"]').click(function () {
+        Adicionar($(this).data('id').toString().split('|')[0], $(this).data('id').toString().split('|')[1])
+    });
+
+    $('a[name="LinkRecusarAmizade"]').click(function () {
+        Recusar($(this).data('id').toString().split('|')[0], $(this).data('id').toString().split('|')[1])
+    });
+}
+
+// Função responsável por obter somente o valor numérico de sumTipsElement
+function extractNumericValue(text) {
+    const matches = text.match(/(\d+(?:,\d{1,2})?)/);
+
+    if (matches && matches.length > 0) {
+        return matches[0];
+    }
+
+    return "0,00";
+}
+
+function toggleImageLike(btnLike, idPost) {
+    const countElement = findElement("#countLikes" + idPost);
+    let currentValue = parseInt(countElement.html()) || 0;
+    let currentSrc = btnLike.attr("src");
+    let newSrc = '';
+    if (currentSrc === '/assets/img/icons/feed/Vectorheartbg.svg') {
+        newSrc = '/assets/img/icons/feed/Vectorheart.svg';
+        currentValue -= 1;
+    } else if (currentSrc === '/assets/img/icons/feed/Vectorheart.svg') {
+        newSrc = '/assets/img/icons/feed/Vectorheartbg.svg';
+        currentValue += 1;
+    }
+
+    if (newSrc !== '') {
+        btnLike.attr("src", newSrc);
+    }
+
+    countElement.html(currentValue.toString());
+
+    let sumComments = parseInt(findElement("#countComment" + idPost).html()) || 0;
+
+    let sumTipsElement = findElement("#sumTips" + idPost);
+    let sumTipsValue = extractNumericValue(sumTipsElement.html().trim());
+
+    if (parseFloat(sumTipsValue.replace(',', '.')) > 0) {
+        if (sumComments > 0 || currentValue > 0) {
+            findElement("#separeSumTips" + idPost).removeClass("d-none");
+            findElement("#sumTips" + idPost).removeClass("d-none");
+        } else {
+            findElement("#separeSumTips" + idPost).addClass("d-none");
+            findElement("#sumTips" + idPost).addClass("d-none");
+        }
+    } else {
+        // #sumTips não é maior que zero, manter oculto o separador e o sumTips
+        findElement("#separeSumTips" + idPost).addClass("d-none");
+        findElement("#sumTips" + idPost).addClass("d-none");
+    }
+
+    if (currentValue == 1) {
+        findElement("#textcountLikes" + idPost).addClass("d-none");
+        findElement("#countLikes" + idPost).removeClass('d-none');
+        findElement("#textcountLike" + idPost).removeClass("d-none");
+
+        if (sumComments > 0) {
+            findElement("#separeCountComment" + idPost).removeClass("d-none");
+        } else {
+            findElement("#separeCountComment" + idPost).addClass("d-none");
+        }
+    } else if (currentValue > 1) {
+        findElement("#textcountLike" + idPost).addClass("d-none");
+        findElement("#textcountLikes" + idPost).removeClass("d-none");
+        findElement("#countLikes" + idPost).removeClass("d-none");
+
+        if (sumComments > 0) {
+            findElement("#separeCountComment" + idPost).removeClass("d-none");
+        } else {
+            findElement("#separeCountComment" + idPost).addClass("d-none");
+        }
+    } else {
+        findElement("#textcountLike" + idPost).addClass("d-none");
+        findElement("#countLikes" + idPost).addClass('d-none');
+        findElement("#textcountLikes" + idPost).addClass("d-none");
+        findElement("#separeCountComment" + idPost).addClass("d-none");
+    }
+}
+
+function Like(idPost, e) {
+    e?.preventDefault();
+
+    findElement("#btnlike" + idPost).css("pointer-events", "none");
+
+    var span = findElement("#countLikes" + idPost);
+    var btnLike = findElement("#btnlike" + idPost);
+
+    toggleImageLike(btnLike, idPost);
+
+    var url = "/Index?handler=Like";
+    $.ajax({
+        url: url,
+        data: { IdPost: idPost, TotalLike: span.val() },
+        cache: false,
+        async: true,
+        type: "GET",
+        success: function (data) {
+            if (data.OK) {
+                span.html(data.Likes);
+                btnLike.attr("src", (data.curtida) ? "/assets/img/icons/feed/Vectorheartbg.svg" : "/assets/img/icons/feed/Vectorheart.svg");
+                findElement("#btnlike" + idPost).css("pointer-events", "");
+
+                if (data?.curtida) {
+                    findElement("#btnlike" + idPost).addClass("was-liked");
+                } else {
+                    findElement("#btnlike" + idPost).removeClass("was-liked");
+                }
+
+                return true;
+            }
+            findElement("#btnlike" + idPost).css("pointer-events", "");
+            return false;
+
+        },
+        error: function (reponse) {
+            findElement("#btnlike" + idPost).css("pointer-events", "");
+        }
+    });
+}
+
+function onlyUnique(value, index, self) {
+    return self.indexOf(value) === index;
+}
+
+function Comentar(idPost, idUsuario, idComentario) {
+    findElement("#btnComentar_" + idPost + idUsuario).prop('disabled', true);
+    findElement("#btnComentar_" + idPost + idUsuario).css("pointer-events", "none");
+
+    var textoComentario = findElement("#comentario_" + idPost + "")[0].value;
+    
+    findElement(".textBtncommentsLoader").removeClass("d-none");
+    findElement(".textBtncomments").addClass("d-none");
+
+    var url = "/Index?handler=Comentar";
+    $.ajax({
+        url: url,
+        data: { IdUsuario: idUsuario, IdPost: idPost, Texto: textoComentario, IdComentario: idComentario },
+        cache: false,
+        async: true,
+        type: "GET",
+        success: function (data) {
+            ObterComentarios(idPost, false);
+            findElement(".textBtncomments").removeClass("d-none");
+            findElement(".textBtncommentsLoader").addClass("d-none");
+
+            findElement("#btnComentar_" + idPost + idUsuario).prop('disabled', false);
+            findElement("#btnComentar_" + idPost + idUsuario).css("pointer-events", "");
+            findElement("#comentario_" + idPost).val('');
+        },
+        error: function (reponse) {
+            findElement(".textBtncomments").removeClass("d-none");
+            findElement(".textBtncommentsLoader").addClass("d-none");
+
+            findElement("#btnComentar_" + idPost + idUsuario).prop('disabled', false);
+            findElement("#btnComentar_" + idPost + idUsuario).css("pointer-events", "");
+        }
+    });
+}
+
+function OcultarMostrarComentario(idComentario) {
+    var url = "/Index?handler=OcultarMostrarComentario";
+    $.ajax({
+        url: url,
+        data: { IdComentario: idComentario },
+        cache: false,
+        async: true,
+        type: "GET",
+        success: function (data) {
+            if (!data.OK) {
+                span.innerHTML = data.Likes;
+                return false;
+            }
+            else {
+                location.reload();
+                return true;
+            }
+        }
+    });
+}
+
+function OpenCloseComments(post, btnComment) {
+    post.addClass('is-active').closest('.card').find('.comments-wrap').toggleClass('is-hidden');
+
+    if (post.closest('.card').find('.comments-wrap').hasClass('is-hidden')) {
+        btnComment.attr("src", "/assets/img/icons/feed/Vectorcomment.svg");
+    } else {
+        btnComment.attr("src", "/assets/img/icons/feed/Vectorcomment2.svg");
+    }
+}
+
+function ObterComentarios(idPost, open = true) {
+    var btnComment = findElement("#commentbtnpost" + idPost);
+    var partialDiv = findElement("#partialFor" + idPost);
+
+    
+    var url = "/Index?handler=PartialComments";
+    $.ajax({
+        url: url,
+        data: { PostId: idPost },
+        cache: false,
+        async: true,
+        type: "GET",
+        success: function (data) {
+            partialDiv.html(data);
+            if (open)
+                OpenCloseComments(partialDiv, btnComment);
+
+            var partialDivJQuery = $(partialDiv);
+            var commentTooltip = partialDivJQuery.find('[id^="tooltipBtnComentar_"]');
+            var commentButton = partialDivJQuery.find('[id^="btnComentar_"]');
+            var comentario = partialDivJQuery.find('[id^="comentario_"]');
+            
+
+            commentTooltip.tooltip(); 
+
+            comentario.keyup(function (ev) {             
+                if (comentario.val()?.trim().length >= 1) {
+                    commentTooltip.tooltip("disable").tooltip("hide");
+                    commentButton.prop('disabled', false);
+                    commentButton.css("pointer-events", "");
+                } else {
+                    commentButton.prop('disabled', true);
+                    commentButton.css("pointer-events", "none");
+                    commentTooltip.tooltip("enable");
+                }
+            });
+
+            setTimeout(function () {
+                var qtdPosts = partialDiv.find(".comments-body").length;
+                findElement("#countComment" + idPost).html(qtdPosts);
+
+                let sumPosts = parseInt(findElement("#countLikes" + idPost).html()) || 0;
+
+                if (qtdPosts == 1) {
+                    findElement("#textcountComments" + idPost).addClass("d-none");
+                    findElement("#countComment" + idPost).removeClass('d-none');
+                    findElement("#textcountComment" + idPost).removeClass("d-none");
+
+                    if (sumPosts > 0) {
+                        findElement("#separeCountComment" + idPost).removeClass("d-none");
+                    } else {
+                        findElement("#separeCountComment" + idPost).addClass("d-none");
+                    }
+                } else if (qtdPosts > 1) {
+                    findElement("#textcountComment" + idPost).addClass("d-none");
+                    findElement("#textcountComments" + idPost).removeClass("d-none");
+                    findElement("#countComments" + idPost).removeClass("d-none");
+
+                    if (sumPosts > 0) {
+                        findElement("#separeCountComment" + idPost).removeClass("d-none");
+                    } else {
+                        findElement("#separeCountComment" + idPost).addClass("d-none");
+                    }
+                } else {
+                    findElement("#textcountComment" + idPost).addClass("d-none");;
+                    findElement("#countComment" + idPost).addClass('d-none');
+                    findElement("#textcountComments" + idPost).addClass("d-none");
+                    findElement("#separeCountComment" + idPost).addClass("d-none");
+                } 
+
+            }, 200);
+
+            
+
+            return true;
+        }
+    });
+}
+
+function RemoverPostagem(postId, title, text, btnCancel, btnConfirm) {
+    swal({
+        title: title,
+        text: text,
+        icon: "warning",
+        buttons: {
+            cancel: {
+                text: btnCancel,
+                value: false,
+                visible: true,
+                className: "",
+                closeModal: true
+            },
+            confirm: {
+                text: btnConfirm,
+                value: true,
+                visible: true,
+                className: "",
+                closeModal: true
+            }
+        }
+    }).then(function (okay) {
+
+        if (okay) {
+            initPageloader();
+            var url = "/Index?handler=RemovePost";
+            $.ajax({
+                url: url,
+                data: { PostId: postId },
+                cache: false,
+                async: true,
+                type: "GET",
+                success: function (data) {
+                    if (data.ok) {
+                        alert(data.message);
+                        window.location.reload();
+                        return true;
+                    }
+                    else {
+                        $('.pageloader').toggleClass('is-active');
+                        swal({
+                            title: $i18nShared.post.removePost,
+                            text: data.message,
+                            icon: "warning",
+                            buttons: {
+                                confirm: {
+                                    text: "Ok",
+                                    value: true,
+                                    visible: true,
+                                    className: "",
+                                    closeModal: true
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+        }
+    });
+}
+
+function RemoverComentario(comentarioId, postId) {
+    findElement("#itemComentario_" + comentarioId).hide();
+    var url = "/Index?handler=RemoveComentario";
+    $.ajax({
+        url: url,
+        data: { ComentarioId: comentarioId },
+        cache: false,
+        async: true,
+        type: "GET",
+        success: function (data) {
+            var partialDiv = findElement("#partialFor" + postId);
+            var partialDivJQuery = $(partialDiv);
+            var commentTooltip = partialDivJQuery.find('[id^="tooltipBtnComentar_"]');
+            commentTooltip.tooltip("disable").tooltip("hide");
+
+            ObterComentarios(postId, false);
+        },
+        error: function (reponse) {
+            $("#itemComentario_" + comentarioId).show();
+        }
+    });
+}
+
+function ArquivaDesarquivaPublicacao(postId) {
+    initPageloader();
+    var url = "/Index?handler=ArquivarPublicacao";
+    $.ajax({
+        url: url,
+        data: { _PostId: postId },
+        cache: false,
+        async: true,
+        type: "GET",
+
+        success: function (data) {
+            if (data.ok) {
+                alert(data.message);
+                window.location.reload();
+                return true;
+            }
+            else {
+                $('.pageloader').toggleClass('is-active');
+                swal({
+                    title: $i18nShared.post.archive,
+                    text: data.message,
+                    icon: "warning",
+                    buttons: {
+                        confirm: {
+                            text: "Ok",
+                            value: true,
+                            visible: true,
+                            className: "",
+                            closeModal: true
+                        }
+                    }
+                });
+            }
+        }
+    });
+}
+
+function HabilitaDesabilitaComentario(postId) {
+    initPageloader();
+
+    var url = "/Index?handler=DesabilitarComentarios";
+    $.ajax({
+        url: url,
+        data: { _PostId: postId },
+        cache: false,
+        async: true,
+        type: "GET",
+        success: function (data) {
+            alert(data.message);
+            window.location.reload();
+            return true;
+        }
+    });
+}
+
+function FixaDesafixaPost(postId) {
+    initPageloader();
+
+    var url = "/Index?handler=FixaDesafixaPost";
+    $.ajax({
+        url: url,
+        data: { _PostId: postId },
+        cache: false,
+        async: true,
+        type: "GET",
+        success: function (data) {
+            alert(data.message);
+            window.location.reload();
+            return true;
+        }
+    });
+}
